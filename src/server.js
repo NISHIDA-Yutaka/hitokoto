@@ -21,7 +21,7 @@ const LIMITS = {
   jevPerDay: Number(process.env.MAX_JEV ?? 3000),
 };
 
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' };
+const TYPES = { '.png': 'image/png', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' };
 const PUBLIC_DIR = fileURLToPath(new URL('../public/', import.meta.url));
 const assets = new Map(readdirSync(PUBLIC_DIR).map((f) => [`/${f}`, { body: readFileSync(join(PUBLIC_DIR, f)), type: TYPES[extname(f)] ?? 'application/octet-stream' }]));
 const CSP = "default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'";

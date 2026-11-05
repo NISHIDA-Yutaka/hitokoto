@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice">
+  <g fill="#132433">
+    <path d="M1600 -60 L0 300 L0 380 L1600 20Z"/>
+    <path d="M1600 60 L0 420 L0 500 L1600 140Z"/>
+    <path d="M1600 180 L0 540 L0 620 L1600 260Z"/>
+    <path d="M1600 300 L0 660 L0 740 L1600 380Z"/>
+    <path d="M1600 420 L0 780 L0 860 L1600 500Z"/>
+    <path d="M1600 540 L0 900 L0 980 L1600 620Z"/>
+    <path d="M1600 660 L0 1020 L0 1100 L1600 740Z"/>
+    <path d="M1600 780 L0 1140 L0 1220 L1600 860Z"/>
+  </g>
+</svg>
