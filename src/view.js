@@ -11,6 +11,8 @@ export function viewFor({ room, players, game }, seat, online = {}, candidates =
   const over = game.phase === 'won' || game.phase === 'lost';
   const turn = currentTurn(game);
   const revealAi = game.settings.aiReveal === 'afterTurn';
+  // 選んだ語と結果は盤面に出ている内容なので、ゲーム中も2人に見せてよい
+  const pickList = (t) => t.picks.map((p) => ({ word: game.cells[p.cell].word, result: p.result }));
   const pickable = isGuesser(game, seat);
   // 候補は推理する側の印で、秘密ではない。今の手番のものだけ、2人に同じものを見せる
   const marked = (s) => {
@@ -43,9 +45,11 @@ export function viewFor({ room, players, game }, seat, online = {}, candidates =
         hint: t.hint,
         number: t.number,
         correct: t.picks.filter((p) => p.result === 'green').length,
+        picks: pickList(t),
         end: t.end,
         ...(revealAi && t.end ? { ai: tsukkomi(t) } : {}),
       })),
+      suddenPicks: game.turns.filter((t) => t.hint === '').flatMap(pickList),
       current: turn && turn.hint !== '' ? { mine: turn.giver === seat, hint: turn.hint, number: turn.number } : null,
       candidates: { mine: marked(seat), partner: marked(other(seat)) },
       canGive: nextGivers(game).includes(seat),

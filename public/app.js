@@ -87,7 +87,7 @@ function matchesSvg(total, left, burning = 0) {
 // 正の字の書き順
 const SEI = ['M6 7H34', 'M20 7V34', 'M20 20H31', 'M10 20V34', 'M4 34H36'];
 function tally(found, fresh = 0) {
-  return el('div', { class: 'tally', role: 'img', 'aria-label': `協力者 ${found}人に接触` }, [0, 1, 2].map((k) =>
+  return el('div', { class: 'tally', role: 'img', 'aria-label': `正解 ${found}枚` }, [0, 1, 2].map((k) =>
     svg('svg', { viewBox: '0 0 40 40', 'aria-hidden': 'true' }, SEI.map((d, i) => {
       const n = k * 5 + i;
       const on = n < found;
@@ -151,7 +151,7 @@ function howto() {
     el('h2', { id: 'howto-h' }, '遊び方は、電報を打つだけ'),
     el('div', { class: 'howto-grid' },
       step(el('div', { class: 'tele-mini' }, teleLine('夜食', 2)), 'ヒントは1語と数字だけ', '当ててほしい語の数を添えて、相方に電報を打ちます。交代でヒントを出し合います。'),
-      step([plainCard('砂漠', 'green', 'あなた'), plainCard('砂漠', 'assassin', '相方')], '見えている色は2人で違う', '同じ語が、あなたには協力者、相方には黒幕かもしれません。15人全員に接触すれば解決です。'),
+      step([plainCard('砂漠', 'green', 'あなた'), plainCard('砂漠', 'assassin', '相方')], '見えている色は2人で違う', '同じ語が、あなたには協力者、相方には黒幕かもしれません。15人全員を当てれば解決です。'),
       step(matchesSvg(9, 6), 'マッチが尽きる前に', '手番のたびに1本燃えます。尽きたらヒントなしの勝負。1回外せば負けです。'),
       step(waxSeal({ class: 'mark-lg', 'aria-hidden': 'true' }), '黒幕に触れるのは1回まで', '2回目で事件は迷宮入り。話すなら通話で、自分の面の色だけは口にしないでください。')))
   );
@@ -291,8 +291,8 @@ function switchSeat() {
 let ws;
 let state = null;
 let retry = 0;
-const noFresh = () => ({ contacts: new Set(), misses: new Set(), found: 0, burned: 0, telegram: false, ring: null, pin: null, deal: false });
-const ui = { targets: new Set(), tab: 'input', hintWord: '', hintNumber: 1, numberTouched: false, fresh: noFresh() };
+const noFresh = () => ({ contacts: new Set(), misses: new Set(), found: 0, burned: 0, telegram: false, ring: null, deal: false });
+const ui = { touchedAt: 0, targets: new Set(), tab: 'input', hintWord: '', hintNumber: 1, numberTouched: false, fresh: noFresh() };
 const shownAi = new Set();
 let seenOuts = null;
 let seenPhase = null;
@@ -358,6 +358,9 @@ function onState(next) {
   const g = next.game;
   if (g) {
     noteChanges(state?.game, g);
+    if (state?.game && Date.now() - ui.touchedAt < 500) {
+      g.candidates.mine = state.game.candidates.mine.filter((i) => g.cells[i].selectable);
+    }
     for (const t of g.turns) {
       if (!t.ai || shownAi.has(t.no)) continue;
       shownAi.add(t.no);
@@ -399,8 +402,8 @@ const crossSvg = (fresh) => svg('svg', { class: `cross${fresh ? ' fresh' : ''}`,
   svg('path', { pathLength: 1, d: 'M152 10C106 36 56 62 8 91' }));
 
 // 押しピンで留めた付箋。角が折れていて、札の上に被さる
-const pinSvg = (partner, fresh) => svg('svg', {
-  class: `pin${partner ? ' partner' : ''}${fresh ? ' fresh' : ''}`,
+const pinSvg = (partner) => svg('svg', {
+  class: `pin${partner ? ' partner' : ''}`,
   viewBox: '0 0 60 72',
   role: 'img',
   'aria-label': partner ? '相方の候補' : '自分の候補',
@@ -468,17 +471,18 @@ function cardNode(c, i, g) {
     disabled: !interactive,
     'aria-label': label,
     'aria-pressed': mine || ui.targets.has(i) ? 'true' : 'false',
-    onclick: () => {
-      if (hinting) {
-        if (ui.targets.has(i)) ui.targets.delete(i);
-        else { ui.targets.add(i); ui.fresh.ring = i; }
-        if (!ui.numberTouched) ui.hintNumber = Math.max(1, ui.targets.size);
-      } else {
-        toggleCandidate(g, i);
-      }
-      render();
-    },
   }, parts);
+  // 札は作り直さず使い回すので、押したときの動きは差し替えられる形で持つ
+  node.onclick = () => {
+    if (hinting) {
+      if (ui.targets.has(i)) ui.targets.delete(i);
+      else { ui.targets.add(i); ui.fresh.ring = i; }
+      if (!ui.numberTouched) ui.hintNumber = Math.max(1, ui.targets.size);
+    } else {
+      toggleCandidate(g, i);
+    }
+    render();
+  };
   node.style.setProperty('--i', i);
   return node;
 }
@@ -487,8 +491,66 @@ function cardNode(c, i, g) {
 function toggleCandidate(g, i) {
   const list = g.candidates.mine;
   if (list.includes(i)) list.splice(list.indexOf(i), 1);
-  else { list.push(i); ui.fresh.pin = i; }
+  else list.push(i);
+  ui.touchedAt = Date.now();
   send({ t: 'candidates', cells: list });
+}
+
+// ---------- 札の更新 ----------
+
+const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+const signature = (card) => card.innerHTML.replaceAll(' fresh', '');
+
+function paintCard(card, next) {
+  const flipping = card.classList.contains('flip');
+  card.className = next.className;
+  if (flipping) card.classList.add('flip');
+  const sig = signature(next);
+  if (card.sig !== sig) {
+    card.sig = sig;
+    card.replaceChildren(...next.childNodes);
+  }
+}
+
+// 付箋と確定ボタンは、付くときも外れるときも動かす
+function syncExtra(cell, next, selector) {
+  const now = cell.querySelector(`${selector}:not(.out)`);
+  const incoming = next.querySelector(selector);
+  if (now && incoming) {
+    if (now.getAttribute('class') !== incoming.getAttribute('class')) now.replaceWith(incoming);
+  } else if (now) {
+    now.classList.add('out');
+    setTimeout(() => now.remove(), calm() ? 0 : 200);
+  } else if (incoming) {
+    cell.append(incoming);
+  }
+}
+
+function morphCell(cell, next, flip) {
+  const card = cell.querySelector('.card');
+  const nextCard = next.querySelector('.card');
+  cell.className = next.className;
+  card.onclick = nextCard.onclick;
+  card.disabled = nextCard.disabled;
+  card.setAttribute('aria-label', nextCard.getAttribute('aria-label'));
+  card.setAttribute('aria-pressed', nextCard.getAttribute('aria-pressed'));
+  syncExtra(cell, next, '.pin');
+  syncExtra(cell, next, '.confirm');
+
+  card.turn = (card.turn ?? 0) + 1;
+  if (!flip || calm()) { paintCard(card, nextCard); return; }
+  // 裏返って真横を向いた瞬間に結果へ差し替える
+  const turn = card.turn;
+  card.classList.add('flip');
+  setTimeout(() => { if (card.turn === turn) paintCard(card, nextCard); }, 210);
+  setTimeout(() => card.classList.remove('flip'), 500);
+}
+
+function morphBoard(board, next) {
+  const fresh = ui.fresh;
+  [...next.children].forEach((cell, i) => {
+    morphCell(board.children[i], cell, fresh.contacts.has(i) || fresh.misses.has(i));
+  });
 }
 
 function cellNode(c, i, g) {
@@ -501,7 +563,7 @@ function cellNode(c, i, g) {
   if (canConfirm) classes.push('can-confirm');
   return el('div', { class: classes.join(' ') },
     cardNode(c, i, g),
-    (mine || partner) && pinSvg(!mine, ui.fresh.pin === i),
+    (mine || partner) && pinSvg(!mine),
     canConfirm && el('button', {
       class: 'confirm',
       type: 'button',
@@ -511,7 +573,7 @@ function cellNode(c, i, g) {
 }
 
 function statusText(g) {
-  if (g.phase === 'won') return '事件解決！ 協力者15人に接触しました';
+  if (g.phase === 'won') return '事件解決！ 協力者15人を見つけました';
   if (g.phase === 'lost') return '迷宮入り';
   if (g.phase === 'sudden_death') return g.canPick ? 'マッチ切れ。ヒントなしで残りを当ててください。1回外せば負けです' : 'マッチ切れ。相方の推理を待っています';
   if (g.current) {
@@ -561,8 +623,8 @@ function pickBar(g) {
   const n = g.candidates.mine.length;
   return el('div', { class: 'choose' },
     el('span', { class: 'hint-note' }, n
-      ? `候補 ${n}枚。付箋の札の「確定」で答えます。`
-      : 'カードを選ぶと付箋が付きます。何枚でも付けられて、相方にも見えます。'),
+      ? `候補 ${n}枚。札の「確定」で答えます。`
+      : '札を選ぶと付箋が付きます。相方にも見えます。'),
     g.canStop && el('button', { class: 'btn', type: 'button', onclick: () => send({ t: 'stop' }) }, '手番を終える'));
 }
 
@@ -581,15 +643,31 @@ function telegramNode(g) {
     el('p', { class: 'hint-note' }, `${state.partner.name ?? '相方'}さんが電報を考えています。`));
 }
 
+const RESULTS = { green: ['正解', 'ok'], bystander: ['不正解', 'ng'], assassin: ['黒幕', 'bad'] };
+
+function pickChips(picks, pop) {
+  if (!picks.length) return null;
+  return el('ul', { class: 'picks' }, picks.map((p, i) => {
+    const [label, kind] = RESULTS[p.result];
+    return el('li', { class: `pick ${kind}${pop && i === picks.length - 1 ? ' pop' : ''}` }, el('span', {}, p.word), el('b', {}, label));
+  }));
+}
+
 function historyBox(g) {
-  const items = [...g.turns].reverse().map((t) => el('li', {},
+  const pop = ui.fresh.contacts.size > 0 || ui.fresh.misses.size > 0;
+  const sudden = g.suddenPicks.length > 0;
+  const items = [...g.turns].reverse().map((t, i) => el('li', {},
     el('div', { class: 'hint' }, t.hint, el('b', {}, String(t.number))),
-    el('div', { class: 'sub' }, `第${t.no}報・${t.mine ? '自分' : '相方'}のヒント・${t.correct}人に接触${t.end ? '' : '（進行中）'}`),
+    el('div', { class: 'sub' }, `第${t.no}報・${t.mine ? '自分' : '相方'}のヒント${t.end ? '' : '（回答中）'}`),
+    pickChips(t.picks, pop && !sudden && i === 0),
     t.ai && [
       gauge(t.ai.tsujido),
       el('div', { class: 'line' }, `通じ度 ${t.ai.tsujido}%　${t.ai.line}`),
     ]));
-  return el('section', { class: 'box' }, el('h2', {}, '捜査メモ'),
+  if (sudden) {
+    items.unshift(el('li', {}, el('div', { class: 'hint' }, 'ヒントなしの勝負'), pickChips(g.suddenPicks, pop)));
+  }
+  return el('section', { class: 'box', 'data-slot': 'memo' }, el('h2', {}, '捜査メモ'),
     items.length ? el('ul', { class: 'history' }, items) : el('p', { class: 'notice' }, '打った電報がここに残ります'));
 }
 
@@ -603,8 +681,8 @@ function ledgerNode(g) {
   const slots = Array.from({ length: g.maxOuts + 1 }, (_, i) => (i < g.outs
     ? waxSeal({ 'aria-hidden': 'true' })
     : svg('svg', { viewBox: '0 0 40 40', 'aria-hidden': 'true' }, svg('circle', { class: 'slot', cx: 20, cy: 20, r: 16 }))));
-  return el('section', { class: 'ledger', 'aria-label': '捜査の状況' },
-    el('div', { class: 'tally-box' }, el('h2', {}, '接触', el('span', { class: 'num' }, `${g.found}/15`)), tally(g.found, ui.fresh.found)),
+  return el('section', { class: 'ledger', 'aria-label': '捜査の状況', 'data-slot': 'ledger' },
+    el('div', { class: 'tally-box' }, el('h2', {}, '正解', el('span', { class: 'num' }, `${g.found}/15`)), tally(g.found, ui.fresh.found)),
     el('div', {}, el('h2', {}, 'マッチ', el('span', { class: 'num' }, `${g.timerBank}本`)), matchesSvg(g.timers, g.timerBank, ui.fresh.burned)),
     el('div', {}, el('h2', {}, '黒幕', el('span', { class: 'num' }, `${g.outs}回`)), el('div', { class: 'seals', role: 'img', 'aria-label': `${g.outs}アウト` }, slots)));
 }
@@ -616,7 +694,7 @@ function reviewNode(g) {
   const cols = ['ヒント', '狙い', '相方の選択', 'AIの予想', '迷わせ', '通じ度', '危険度'];
   const td = (i, ...children) => el('td', { 'data-label': cols[i] }, children);
   const hasScore = g.score !== null && g.score !== undefined;
-  return el('section', { class: 'review paper', id: 'review' },
+  return el('section', { class: 'review paper', id: 'review', 'data-slot': 'review' },
     el('div', { class: 'review-head' },
       el('h2', { class: g.phase === 'won' ? 'verdict-won' : 'verdict-lost' }, g.phase === 'won' ? '事件解決' : '迷宮入り'),
       hasScore && el('p', { class: 'score' }, el('b', {}, String(g.score)), `点${g.score >= 9 ? '　お見事' : g.score > 5 ? '　上出来' : ''}`)),
@@ -649,8 +727,8 @@ function render() {
 
   const over = g.phase === 'won' || g.phase === 'lost';
   const notices = [
-    g.myGreensDone && !over && el('p', { class: 'notice' }, 'あなたの面の協力者はすべて接触済みです。電報は相方が打ちます。'),
-    g.partnerGreensDone && !over && el('p', { class: 'notice' }, '相方の面の協力者はすべて接触済みです。'),
+    g.myGreensDone && !over && el('p', { class: 'notice' }, 'あなたの面の協力者はすべて見つかりました。電報は相方が打ちます。'),
+    g.partnerGreensDone && !over && el('p', { class: 'notice' }, '相方の面の協力者はすべて見つかりました。'),
   ];
   const solo = isSolo();
   const seatButton = (cls) => el('button', { class: `btn ${cls}`, type: 'button', onclick: switchSeat }, '相方の席に替わる');
@@ -677,19 +755,40 @@ function render() {
       onchange: (e) => { store.set('hitokoto.assist', e.target.checked ? '1' : '0'); render(); },
     }), '色覚サポート');
 
-  const table = el('div', { class: 'table', 'data-tab': ui.tab },
-    el('header', { class: 'status-line' },
+  const slots = {
+    head: el('header', { class: 'status-line', 'data-slot': 'head' },
       el('span', { class: 'brand' }, markSvg(), el('span', { class: 'title' }, 'ひとこと探偵')),
       el('span', { class: 'state' }, statusText(g)),
       solo && el('span', { class: 'meta' }, `動作確認中・${state.you.name}の席`),
       solo && (over || g.canGive || g.canPick) && seatButton('small'),
       !solo && !state.partner.online && el('span', { class: 'meta off' }, '相方は接続していません')),
-    ledgerNode(g),
-    el('div', { class: 'board-wrap' }, el('div', { class: `board${ui.fresh.deal ? ' deal' : ''}` }, g.cells.map((c, i) => cellNode(c, i, g)))),
-    el('div', { class: 'actions' }, tabs, el('div', { class: 'actions-body' }, notices, action)),
-    el('aside', { class: 'panel' }, historyBox(g), assist),
-    over && reviewNode(g));
-  app.replaceChildren(table);
+    ledger: ledgerNode(g),
+    actions: el('div', { class: 'actions', 'data-slot': 'actions' }, tabs, el('div', { class: 'actions-body' }, notices, action)),
+    panel: el('aside', { class: 'panel', 'data-slot': 'panel' }, historyBox(g), assist),
+    review: over ? reviewNode(g) : null,
+  };
+  const board = el('div', { class: `board${ui.fresh.deal ? ' deal' : ''}` }, g.cells.map((c, i) => cellNode(c, i, g)));
+  for (const cell of board.children) {
+    const card = cell.querySelector('.card');
+    card.sig = signature(card);
+  }
+
+  // 盤面は置いたまま、周りだけ入れ替える。札の動きがつながるようにするため
+  const current = app.querySelector(':scope > .table');
+  if (current && !ui.fresh.deal) {
+    current.dataset.tab = ui.tab;
+    morphBoard(current.querySelector('.board'), board);
+    for (const [name, node] of Object.entries(slots)) {
+      const old = current.querySelector(`:scope > [data-slot="${name}"]`);
+      if (old && node) old.replaceWith(node);
+      else if (old) old.remove();
+      else if (node) current.append(node);
+    }
+  } else {
+    app.replaceChildren(el('div', { class: 'table', 'data-tab': ui.tab },
+      slots.head, slots.ledger, el('div', { class: 'board-wrap' }, board), slots.actions, slots.panel, slots.review));
+    setTimeout(() => board.classList.remove('deal'), 1000);
+  }
   ui.fresh = noFresh();
 
   if (keepFocus) {

@@ -91,3 +91,12 @@ test('ヒントを出した側は候補を付けられない', () => {
   assert.throws(() => candidateCells(g, 'A', [target]), /選ぶ番ではありません/);
   assert.throws(() => candidateCells(g, 'B', 'x'), /候補の指定/);
 });
+
+test('捜査メモ用に、選んだ語と結果を2人に送る', () => {
+  const { g, target } = setup();
+  pick(g, 'B', target);
+  for (const seat of ['A', 'B']) {
+    assert.deepEqual(view(g, seat).game.turns[0].picks, [{ word: g.cells[target].word, result: 'green' }]);
+    assert.deepEqual(view(g, seat).game.suddenPicks, []);
+  }
+});
