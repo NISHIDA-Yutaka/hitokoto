@@ -296,6 +296,7 @@ const ui = { touchedAt: 0, targets: new Set(), tab: 'input', hintWord: '', hintN
 const shownAi = new Set();
 let seenOuts = null;
 let seenPhase = null;
+let seenHint;
 
 function connect() {
   const token = store.get(tokenKey(roomCode));
@@ -354,6 +355,28 @@ function curtain(kind, text) {
   setTimeout(() => node.remove(), 2350);
 }
 
+// 相方の電報が届いたことを、画面の真ん中に一瞬出して知らせる。最後は電報欄の方へ落ちていく
+function hintFlash(t) {
+  const node = el('div', { class: 'flash', role: 'status' },
+    el('div', { class: 'flash-sheet' },
+      el('span', { class: 'flash-head' }, `${state.partner.name ?? '相方'}さんから電報`),
+      teleLine(t.hint, t.number)));
+  document.body.append(node);
+  setTimeout(() => node.remove(), 2100);
+}
+
+// 開き直しでは出さない。別のタブを見ていた間に届いた電報は、戻ったときに出す
+function flashNewHint() {
+  const g = state?.game;
+  if (!g || document.hidden) return;
+  const over = g.phase === 'won' || g.phase === 'lost';
+  const no = g.current && !g.current.mine && !over ? g.turns.at(-1).no : null;
+  if (seenHint !== undefined && no !== null && no !== seenHint) hintFlash(g.current);
+  seenHint = no;
+}
+
+document.addEventListener('visibilitychange', flashNewHint);
+
 function onState(next) {
   const g = next.game;
   if (g) {
@@ -379,6 +402,7 @@ function onState(next) {
   }
   state = next;
   render();
+  flashNewHint();
 }
 
 // ---------- ゲーム画面 ----------
@@ -434,8 +458,14 @@ function cardNode(c, i, g) {
   if (ui.targets.has(i)) classes.push('target');
   const misses = c.marks.filter((m) => m.kind === 'bystander');
   const hits = c.marks.filter((m) => m.kind !== 'bystander');
-  if (misses.length && !c.contact) classes.push('missed');
-  if (hits.length) classes.push('exposed');
+  // 外しても、自分の面の協力者は相方に当ててもらう札のまま。元の見た目を残す。黒幕の札も同じ
+  const struck = misses.length > 0 || hits.length > 0;
+  const kept = struck && !c.contact && (c.mine === 'green' || (c.mine === 'assassin' && !hits.length));
+  if (kept) classes.push('kept');
+  else {
+    if (misses.length && !c.contact) classes.push('missed');
+    if (hits.length) classes.push('exposed');
+  }
   if (c.theirs || colorAssist()) classes.push('no-mark');
 
   const parts = [el('span', { class: `word${lenClass(c.word)}` }, c.word)];
@@ -443,6 +473,11 @@ function cardNode(c, i, g) {
   const who = (list) => (list.length === 2 ? '2人とも' : list[0].mine ? '自分が' : '相方が');
   if (hits.length) {
     parts.push(el('span', { class: `tape${ui.fresh.misses.has(i) ? ' fresh' : ''}`, 'aria-hidden': 'true' }, el('b', {}, '黒幕　黒幕　黒幕　黒幕　黒幕　黒幕')));
+  } else if (kept) {
+    parts.push(el('span', { class: `miss-band${ui.fresh.misses.has(i) ? ' fresh' : ''}` },
+      el('i', { 'aria-hidden': 'true' }, '×'),
+      el('span', { class: 'long' }, `${who(misses)}外した`),
+      el('span', { class: 'short' }, '外れ')));
   } else if (misses.length && !c.contact) {
     parts.push(crossSvg(ui.fresh.misses.has(i)));
     parts.push(el('span', { class: 'miss-tag' }, el('span', { class: 'long' }, `${who(misses)}外した`), el('span', { class: 'short' }, '外れ')));

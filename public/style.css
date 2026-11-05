@@ -311,7 +311,7 @@ body.playing { background-image: url("/blinds.svg"); background-size: cover; bac
 .card.covered.mine-green { background-color: #5c7a69; background-image: none; color: #e7e5da; }
 .card.covered.mine-assassin { background-color: #413b46; background-image: none; color: #c9c3cc; }
 
-/* 外れた札: 斜線で潰して赤鉛筆の×。自分の面の色は枠に残す */
+/* 外れた札: 斜線で潰して赤鉛筆の× */
 .card.missed {
   --hatch-a: #a89c83;
   --hatch-b: #978b73;
@@ -324,8 +324,6 @@ body.playing { background-image: url("/blinds.svg"); background-size: cover; bac
 }
 .card.missed .word { text-shadow: 0 0 3px var(--hatch-a), 0 0 6px var(--hatch-a), 0 0 10px var(--hatch-a); }
 .card.missed::after { opacity: 0; }
-.card.missed.mine-green { --hatch-a: #5b7a68; --hatch-b: #4e6c5b; color: #f1eee2; box-shadow: inset 0 0 0 4px var(--ally), 0 2px 0 var(--coal); }
-.card.missed.mine-assassin { --hatch-a: #3d3743; --hatch-b: #332e39; color: #ded8e0; box-shadow: inset 0 0 0 4px var(--sumi), 0 2px 0 var(--coal); }
 .cross { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .cross path { fill: none; stroke: var(--shu); stroke-width: 5; stroke-linecap: round; }
 .cross.fresh path { stroke-dasharray: 1; animation: draw .2s .24s ease-out both; }
@@ -345,6 +343,36 @@ body.playing { background-image: url("/blinds.svg"); background-size: cover; bac
   line-height: 1.5;
 }
 .miss-tag .short { display: none; }
+
+/* 外したが、自分の面では協力者・黒幕のままの札: 色も絵も残し、下に帯を巻くだけにする */
+.card.kept { padding-bottom: 22%; background-position: right 6% top 24%, 0 0; }
+.card.kept.mine-assassin { background-position: right 6% top 24%; }
+.miss-band {
+  --hatch-a: #e6dabf;
+  --hatch-b: #d3c5a4;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  background-image: repeating-linear-gradient(135deg, var(--hatch-a) 0 6px, var(--hatch-b) 6px 12px);
+  box-shadow: 0 -2px 0 var(--coal);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: clamp(10px, 1.35cqw, 13px);
+  font-weight: 700;
+  line-height: 1.5;
+  transform-origin: left;
+}
+.miss-band i { color: var(--shu-deep); font-style: normal; font-weight: 800; }
+.miss-band .short { display: none; }
+/* 終局は右下に相方の面が出るので、短い言い方にして重ねない */
+.card:has(.theirs) .miss-band .long { display: none; }
+.card:has(.theirs) .miss-band .short { display: inline; }
+.miss-band.fresh { animation: band .24s .26s ease-out both; }
 
 /* 黒幕に触れた札: 朱で塗りつぶし、規制線を張る */
 .card.exposed, .card.exposed.missed {
@@ -664,6 +692,37 @@ body.playing { background-image: url("/blinds.svg"); background-size: cover; bac
 #toast.on { opacity: 1; transform: translate(-50%, 0); }
 .shake { animation: shake .34s linear; }
 
+/* 相方の電報が届いた瞬間 */
+.flash {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(8, 16, 25, .58);
+  pointer-events: none;
+  animation: flash-veil 2s linear both;
+}
+.flash-sheet {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  max-width: min(100%, 780px);
+  padding: clamp(14px, 2.6vw, 26px) clamp(16px, 3.4vw, 36px);
+  background-color: var(--lamp);
+  background-image: var(--grain);
+  box-shadow: 8px 8px 0 var(--coal);
+  color: var(--ink);
+  animation: flash-sheet 2s both;
+}
+.flash-head { font-size: clamp(14px, 2vw, 18px); font-weight: 700; }
+.flash .tele-line { justify-content: center; --cell: clamp(60px, 15vw, 108px); }
+.flash .tele-line.m { --cell: clamp(44px, 9vw, 76px); }
+.flash .tele-line.s { --cell: clamp(30px, 6vw, 50px); }
+.flash .tele-char { animation: type .16s ease-out backwards; animation-delay: calc(var(--i) * 45ms + .16s); }
+.flash .tele-line.s .tele-char { animation-delay: calc(var(--i) * 20ms + .16s); }
+
 /* 決着の幕 */
 .curtain {
   position: fixed;
@@ -725,6 +784,13 @@ body.playing { background-image: url("/blinds.svg"); background-size: cover; bac
 @keyframes chip-pop { from { transform: scale(.6); opacity: 0; } 70% { transform: scale(1.08); } }
 @keyframes pin-in { from { transform: translateY(-18px) rotate(-10deg) scale(1.25); opacity: 0; } to { transform: rotate(7deg); opacity: 1; } }
 @keyframes tape { from { transform: rotate(-6deg) scaleX(0); } to { transform: rotate(-6deg) scaleX(1); } }
+@keyframes band { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes flash-veil { 0% { opacity: 0; } 7%, 84% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes flash-sheet {
+  0% { opacity: 0; transform: scale(1.5) rotate(3deg); animation-timing-function: cubic-bezier(.2, .9, .3, 1.2); }
+  12%, 84% { opacity: 1; transform: rotate(-1.5deg); animation-timing-function: cubic-bezier(.5, 0, .9, .5); }
+  100% { opacity: 0; transform: translateY(34vh) scale(.3) rotate(-1.5deg); }
+}
 @keyframes draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
 @keyframes slide-in { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
 @keyframes type { from { opacity: 0; transform: scale(1.5); } to { opacity: 1; transform: none; } }
@@ -796,11 +862,14 @@ body.playing { background-image: url("/blinds.svg"); background-size: cover; bac
   .miss-tag { padding: 0 3px; font-size: 10px; }
   .miss-tag .long { display: none; }
   .miss-tag .short { display: inline; }
-  .card.missed.mine-green, .card.missed.mine-assassin, .card.exposed.mine-green, .card.exposed.mine-assassin { box-shadow: inset 0 0 0 2.5px var(--ally), 0 2px 0 var(--coal); }
-  .card.missed.mine-assassin, .card.exposed.mine-assassin { box-shadow: inset 0 0 0 2.5px var(--sumi), 0 2px 0 var(--coal); }
+  .miss-band { padding: 0 3px; gap: 2px; font-size: 10px; }
+  .miss-band .long { display: none; }
+  .miss-band .short { display: inline; }
+  .card.exposed.mine-green { box-shadow: inset 0 0 0 2.5px var(--ally), 0 2px 0 var(--coal); }
+  .card.exposed.mine-assassin { box-shadow: inset 0 0 0 2.5px var(--sumi), 0 2px 0 var(--coal); }
   .cross path { stroke-width: 7; }
   .tape { bottom: 6%; font-size: 9px; padding: 0; }
-  .card.exposed, .card.exposed.missed { padding-bottom: 20%; }
+  .card.exposed, .card.exposed.missed, .card.kept { padding-bottom: 20%; }
   .pin { top: -20%; right: -4%; width: 23px; }
   .cell.can-confirm .card .word { transform: translateX(-9%); font-size: clamp(11px, 3cqw, 24px); }
   .pin .q { font-size: 30px; }
@@ -864,4 +933,5 @@ body.playing { background-image: url("/blinds.svg"); background-size: cover; bac
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   .curtain { display: none; }
+  .flash, .flash * { animation: none !important; }
 }
