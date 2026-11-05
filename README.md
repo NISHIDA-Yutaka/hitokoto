@@ -20,6 +20,7 @@
 
 ```sh
 psql -d hitokoto_dev -f migrations/001_init.sql   # 初回だけ
+psql -d hitokoto_dev -f seed/words.sql            # 初回だけ
 pnpm install
 PGHOST=/var/run/postgresql PGDATABASE=hitokoto_dev pnpm test
 PORT=3071 HOST=127.0.0.1 PGHOST=/var/run/postgresql PGDATABASE=hitokoto_dev node src/server.js
