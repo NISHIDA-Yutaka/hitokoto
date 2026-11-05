@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { DEFAULT_SETTINGS, giveHint, newGame, pick } from '../src/game.js';
+import { DEFAULT_SETTINGS, candidateCells, giveHint, newGame, pick, stopTurn, turnKey } from '../src/game.js';
 import { tsukkomi, turnOutcome } from '../src/review.js';
 import { viewFor } from '../src/view.js';
 
@@ -67,4 +67,27 @@ test('手番の結果は枚数と終わり方だけで決まる', () => {
   assert.equal(turnOutcome({ number: 2, picks: [green, miss], end: 'bystander' }), 'miss');
   assert.equal(turnOutcome({ number: 2, picks: [green], end: 'stop' }), 'stop');
   assert.equal(tsukkomi({ ai: null }), null);
+});
+
+test('候補の印は2人に同じものを見せ、手番が変われば消える', () => {
+  const { g, target } = setup();
+  const other = g.cells.findIndex((c, i) => i !== target && c.key.A === 'green');
+  const cells = candidateCells(g, 'B', [target, other, other, 99, 'x']);
+  assert.deepEqual(cells, [target, other]);
+  const marks = { B: { turn: turnKey(g), cells } };
+  const see = (seat) => viewFor({ room, players, game: g }, seat, {}, marks).game.candidates;
+  assert.deepEqual(see('A'), { mine: [], partner: [target, other] });
+  assert.deepEqual(see('B'), { mine: [target, other], partner: [] });
+
+  pick(g, 'B', target);
+  assert.deepEqual(see('A').partner, [other], '当てた語は候補から外れる');
+  stopTurn(g, 'B');
+  assert.deepEqual(see('A').partner, []);
+  assert.deepEqual(see('B').mine, []);
+});
+
+test('ヒントを出した側は候補を付けられない', () => {
+  const { g, target } = setup();
+  assert.throws(() => candidateCells(g, 'A', [target]), /選ぶ番ではありません/);
+  assert.throws(() => candidateCells(g, 'B', 'x'), /候補の指定/);
 });

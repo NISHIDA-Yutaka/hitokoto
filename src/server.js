@@ -5,7 +5,7 @@ import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import * as db from './db.js';
-import { GameError, giveHint, normalizeSettings, pick, stopTurn } from './game.js';
+import { GameError, candidateCells, giveHint, normalizeSettings, pick, stopTurn, turnKey } from './game.js';
 import { askJev, computeAi } from './jev.js';
 import { viewFor } from './view.js';
 
@@ -126,6 +126,9 @@ const server = createServer(async (req, res) => {
 const sockets = new Map(); // roomId → Set<ws>
 const ipCounts = new Map();
 
+// 候補の印。手番中だけの目印なので DB には入れない
+const candidates = new Map(); // roomId → { A: { turn, cells }, B: … }
+
 const onlineSeats = (roomId) => Object.fromEntries([...(sockets.get(roomId) ?? [])].map((ws) => [ws.seat, true]));
 
 async function broadcast(roomId) {
@@ -135,7 +138,7 @@ async function broadcast(roomId) {
   if (!state) return;
   const online = onlineSeats(roomId);
   for (const ws of conns) {
-    if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ t: 'state', state: viewFor(state, ws.seat, online) }));
+    if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ t: 'state', state: viewFor(state, ws.seat, online, candidates.get(roomId)) }));
   }
 }
 
@@ -171,6 +174,13 @@ async function handleMessage(ws, msg) {
     case 'pick':
       await db.withGame(roomId, (g) => pick(g, seat, msg.cell));
       break;
+    case 'candidates': {
+      const state = await db.loadRoom(roomId);
+      if (!state?.game) throw new GameError('ゲームが始まっていません');
+      const cells = candidateCells(state.game, seat, msg.cells);
+      candidates.set(roomId, { ...candidates.get(roomId), [seat]: { turn: turnKey(state.game), cells } });
+      break;
+    }
     case 'stop':
       await db.withGame(roomId, (g) => stopTurn(g, seat));
       break;
@@ -244,7 +254,10 @@ wss.on('connection', (ws) => {
     if (!conns) return;
     conns.delete(ws);
     if (conns.size) broadcast(ws.roomId).catch((e) => console.error(e));
-    else sockets.delete(ws.roomId);
+    else {
+      sockets.delete(ws.roomId);
+      candidates.delete(ws.roomId);
+    }
   });
 });
 

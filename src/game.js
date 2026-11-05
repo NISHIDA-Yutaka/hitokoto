@@ -153,12 +153,27 @@ function addMark(cell, pickedBy, kind) {
   if (new Set(cell.marks.map((m) => m.pickedBy)).size === 2) cell.covered = true;
 }
 
+// 今この席が単語を選べる番か
+export function isGuesser(g, seat) {
+  if (g.phase === 'sudden_death') return suddenGuessers(g).includes(seat);
+  const turn = currentTurn(g);
+  return Boolean(turn) && other(turn.giver) === seat;
+}
+
+// 候補の印は手番ごとに持つ。手番が変われば消える
+export const turnKey = (g) => `${g.id}:${currentTurn(g)?.no ?? '-'}`;
+
+export function candidateCells(g, seat, cells) {
+  if (isOver(g) || !isGuesser(g, seat)) throw new GameError('今は選ぶ番ではありません');
+  if (!Array.isArray(cells) || cells.length > g.cells.length) throw new GameError('候補の指定が正しくありません');
+  return [...new Set(cells)].filter((i) => Number.isInteger(i) && canPick(g, seat, i));
+}
+
 export function pick(g, seat, idx) {
   if (isOver(g)) throw new GameError('ゲームは終わっています');
   const turn = currentTurn(g);
   const sudden = g.phase === 'sudden_death';
-  const allowed = sudden ? suddenGuessers(g).includes(seat) : turn && other(turn.giver) === seat;
-  if (!allowed) throw new GameError('今は選ぶ番ではありません');
+  if (!isGuesser(g, seat)) throw new GameError('今は選ぶ番ではありません');
   if (!canPick(g, seat, idx)) throw new GameError('その単語はもう選べません');
 
   const cell = g.cells[idx];

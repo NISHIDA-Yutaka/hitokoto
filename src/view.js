@@ -1,8 +1,8 @@
 // 受け取る人ごとに送る内容を作る。相方の面と狙いは、ゲームが終わるまで入れない。
-import { canPick, currentTurn, nextGivers, other, remaining, score, suddenGuessers } from './game.js';
+import { canPick, currentTurn, isGuesser, nextGivers, other, remaining, score, turnKey } from './game.js';
 import { buildReview, tsukkomi } from './review.js';
 
-export function viewFor({ room, players, game }, seat, online = {}) {
+export function viewFor({ room, players, game }, seat, online = {}, candidates = {}) {
   const you = { seat, name: players[seat]?.name ?? '' };
   const partner = { name: players[other(seat)]?.name ?? null, online: Boolean(online[other(seat)]) };
   const base = { code: room.code, you, partner, settings: room.settings };
@@ -10,11 +10,13 @@ export function viewFor({ room, players, game }, seat, online = {}) {
 
   const over = game.phase === 'won' || game.phase === 'lost';
   const turn = currentTurn(game);
-  const sudden = game.phase === 'sudden_death';
   const revealAi = game.settings.aiReveal === 'afterTurn';
-  const pickable = sudden
-    ? suddenGuessers(game).includes(seat)
-    : Boolean(turn) && other(turn.giver) === seat;
+  const pickable = isGuesser(game, seat);
+  // 候補は推理する側の印で、秘密ではない。今の手番のものだけ、2人に同じものを見せる
+  const marked = (s) => {
+    const m = candidates[s];
+    return !over && m?.turn === turnKey(game) && isGuesser(game, s) ? m.cells.filter((i) => canPick(game, s, i)) : [];
+  };
 
   return {
     ...base,
@@ -45,6 +47,7 @@ export function viewFor({ room, players, game }, seat, online = {}) {
         ...(revealAi && t.end ? { ai: tsukkomi(t) } : {}),
       })),
       current: turn && turn.hint !== '' ? { mine: turn.giver === seat, hint: turn.hint, number: turn.number } : null,
+      candidates: { mine: marked(seat), partner: marked(other(seat)) },
       canGive: nextGivers(game).includes(seat),
       canPick: pickable,
       canStop: game.phase === 'playing' && pickable && turn.picks.some((p) => p.result === 'green'),

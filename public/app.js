@@ -278,8 +278,6 @@ function switchSeat() {
   const current = store.get(tokenKey(roomCode));
   store.set(tokenKey(roomCode), store.get(soloKey(roomCode)));
   store.set(soloKey(roomCode), current);
-  ui.candidate = null;
-  ui.confirming = false;
   ui.targets.clear();
   ui.hintWord = '';
   ui.hintNumber = 1;
@@ -293,8 +291,8 @@ function switchSeat() {
 let ws;
 let state = null;
 let retry = 0;
-const noFresh = () => ({ contacts: new Set(), seals: new Set(), found: 0, burned: 0, telegram: false, ring: null, deal: false });
-const ui = { candidate: null, confirming: false, targets: new Set(), tab: 'input', hintWord: '', hintNumber: 1, numberTouched: false, fresh: noFresh() };
+const noFresh = () => ({ contacts: new Set(), misses: new Set(), found: 0, burned: 0, telegram: false, ring: null, pin: null, deal: false });
+const ui = { targets: new Set(), tab: 'input', hintWord: '', hintNumber: 1, numberTouched: false, fresh: noFresh() };
 const shownAi = new Set();
 let seenOuts = null;
 let seenPhase = null;
@@ -326,8 +324,7 @@ function noteChanges(prev, g) {
   g.cells.forEach((c, i) => {
     const before = prev.cells[i];
     if (c.contact && !before.contact) fresh.contacts.add(i);
-    const seals = (x) => x.marks.filter((m) => m.kind !== 'bystander').length;
-    if (seals(c) > seals(before)) fresh.seals.add(i);
+    if (c.marks.length > before.marks.length) fresh.misses.add(i);
   });
   fresh.found = Math.max(0, g.found - prev.found);
   fresh.burned = Math.max(0, prev.timerBank - g.timerBank);
@@ -375,7 +372,6 @@ function onState(next) {
     if (seenPhase && seenPhase !== g.phase && g.phase === 'won') curtain('solved', '事件解決');
     seenOuts = g.outs;
     seenPhase = g.phase;
-    if (!g.cells[ui.candidate]?.selectable) { ui.candidate = null; ui.confirming = false; }
     if (!g.canGive) { ui.targets.clear(); ui.hintWord = ''; ui.hintNumber = 1; ui.numberTouched = false; }
   }
   state = next;
@@ -386,12 +382,35 @@ function onState(next) {
 
 const SYMBOLS = { green: '●', assassin: '×', bystander: '' };
 const colorAssist = () => store.get('hitokoto.assist') === '1';
-const footSvg = (mine) => svg('svg', {
-  viewBox: '0 0 16 16',
-  class: `foot ${mine ? 'mine' : 'theirs-side'}`,
+
+// 朱肉のかすれた丸い検印。インクの荒れは index.html の #ink フィルター
+const stampSvg = (fresh) => svg('svg', { class: `stamp${fresh ? ' fresh' : ''}`, viewBox: '0 0 100 100', 'aria-hidden': 'true' },
+  svg('g', { filter: 'url(#ink)' },
+    svg('circle', { cx: 50, cy: 50, r: 45, fill: 'none', 'stroke-width': 7 }),
+    svg('circle', { cx: 50, cy: 50, r: 37, fill: 'none', 'stroke-width': 2.4 }),
+    svg('path', { d: 'M15 33H85M15 67H85', fill: 'none', 'stroke-width': 3 }),
+    svg('text', { x: 50, y: 28, class: 'small' }, '捜査'),
+    svg('text', { x: 50, y: 60.5, class: 'big' }, '正解'),
+    svg('text', { x: 50, y: 82, class: 'small' }, '探偵社')));
+
+// 赤鉛筆で2本引いた×。語の下に敷く
+const crossSvg = (fresh) => svg('svg', { class: `cross${fresh ? ' fresh' : ''}`, viewBox: '0 0 160 100', preserveAspectRatio: 'none', 'aria-hidden': 'true' },
+  svg('path', { pathLength: 1, d: 'M10 12C50 34 104 64 151 90' }),
+  svg('path', { pathLength: 1, d: 'M152 10C106 36 56 62 8 91' }));
+
+// 押しピンで留めた付箋。角が折れていて、札の上に被さる
+const pinSvg = (partner, fresh) => svg('svg', {
+  class: `pin${partner ? ' partner' : ''}${fresh ? ' fresh' : ''}`,
+  viewBox: '0 0 60 72',
   role: 'img',
-  'aria-label': mine ? '自分が外した印' : '相方が外した印',
-}, svg('path', { d: 'M8 1c2.2 0 3.4 2 3.4 4.2 0 1.7-.9 3-1.2 4.3H6c-.4-1.4-1.4-2.6-1.4-4.3C4.6 3 5.8 1 8 1zm-2 9.6h4.1c.1 2.4-.8 4.4-2 4.4-1.3 0-2.2-2-2.1-4.4z' }));
+  'aria-label': partner ? '相方の候補' : '自分の候補',
+},
+svg('path', { class: 'note', d: 'M5 12L55 7L57 50L41 66L8 63Z' }),
+svg('path', { class: 'fold', d: 'M57 50L43 49L41 66Z' }),
+svg('text', { x: 30, y: 49, class: 'q' }, partner ? '相' : '？'),
+svg('ellipse', { class: 'pin-shadow', cx: 33, cy: 15, rx: 7, ry: 3.5 }),
+svg('circle', { class: 'pin-head', cx: 30, cy: 10, r: 8 }),
+svg('circle', { class: 'pin-shine', cx: 27.5, cy: 7.5, r: 2.4 }));
 
 // 赤鉛筆でぐるっと囲んだ線。始まりと終わりをわざと重ねない
 const ringSvg = (fresh) => svg('svg', { class: `ring${fresh ? ' fresh' : ''}`, viewBox: '0 0 160 100', preserveAspectRatio: 'none', 'aria-hidden': 'true' },
@@ -409,23 +428,23 @@ function cardNode(c, i, g) {
   if (c.covered) classes.push('covered');
   if (c.contact) classes.push('contact');
   if (interactive) classes.push('interactive');
-  if (ui.candidate === i) classes.push('candidate');
   if (ui.targets.has(i)) classes.push('target');
+  const misses = c.marks.filter((m) => m.kind === 'bystander');
+  const hits = c.marks.filter((m) => m.kind !== 'bystander');
+  if (misses.length && !c.contact) classes.push('missed');
+  if (hits.length) classes.push('exposed');
   if (c.theirs || colorAssist()) classes.push('no-mark');
 
   const parts = [el('span', { class: `word${lenClass(c.word)}` }, c.word)];
   if (colorAssist() && SYMBOLS[c.mine] && !c.contact) parts.push(el('span', { class: 'symbol', 'aria-hidden': 'true' }, SYMBOLS[c.mine]));
-  for (const m of c.marks) {
-    if (m.kind === 'bystander') parts.push(footSvg(m.mine));
-    else {
-      parts.push(waxSeal({
-        class: `seal${ui.fresh.seals.has(i) ? ' fresh' : ''}`,
-        role: 'img',
-        'aria-label': m.mine ? '自分が踏んだ黒幕の印' : '相方が踏んだ黒幕の印',
-      }));
-    }
+  const who = (list) => (list.length === 2 ? '2人とも' : list[0].mine ? '自分が' : '相方が');
+  if (hits.length) {
+    parts.push(el('span', { class: `tape${ui.fresh.misses.has(i) ? ' fresh' : ''}`, 'aria-hidden': 'true' }, el('b', {}, '黒幕　黒幕　黒幕　黒幕　黒幕　黒幕')));
+  } else if (misses.length && !c.contact) {
+    parts.push(crossSvg(ui.fresh.misses.has(i)));
+    parts.push(el('span', { class: 'miss-tag' }, el('span', { class: 'long' }, `${who(misses)}外した`), el('span', { class: 'short' }, '外れ')));
   }
-  if (c.contact) parts.push(el('span', { class: `stamp${ui.fresh.contacts.has(i) ? ' fresh' : ''}`, 'aria-hidden': 'true' }, el('i', {}, '接触')));
+  if (c.contact) parts.push(stampSvg(ui.fresh.contacts.has(i)));
   if (ui.targets.has(i)) parts.push(ringSvg(ui.fresh.ring === i));
   if (c.theirs) {
     const name = NAMES[c.theirs];
@@ -434,27 +453,61 @@ function cardNode(c, i, g) {
       el('span', { class: 'short' }, name[0])));
   }
 
-  const label = [c.word, NAMES[c.mine], c.covered ? '覆われた' : '', c.contact ? '接触済み' : ''].filter(Boolean).join('、');
+  const mine = g.candidates.mine.includes(i);
+  const label = [
+    c.word,
+    NAMES[c.mine],
+    c.contact ? '正解' : '',
+    hits.length ? `${who(hits)}黒幕に触れた` : '',
+    misses.length && !c.contact ? `${who(misses)}外した` : '',
+    mine ? '候補' : '',
+  ].filter(Boolean).join('、');
   const node = el('button', {
     class: classes.join(' '),
     type: 'button',
     disabled: !interactive,
     'aria-label': label,
-    'aria-pressed': ui.candidate === i || ui.targets.has(i) ? 'true' : 'false',
+    'aria-pressed': mine || ui.targets.has(i) ? 'true' : 'false',
     onclick: () => {
       if (hinting) {
         if (ui.targets.has(i)) ui.targets.delete(i);
         else { ui.targets.add(i); ui.fresh.ring = i; }
         if (!ui.numberTouched) ui.hintNumber = Math.max(1, ui.targets.size);
       } else {
-        ui.candidate = ui.candidate === i ? null : i;
-        ui.confirming = false;
+        toggleCandidate(g, i);
       }
       render();
     },
   }, parts);
   node.style.setProperty('--i', i);
   return node;
+}
+
+// 手元はすぐ変え、相方にはサーバー経由で届ける
+function toggleCandidate(g, i) {
+  const list = g.candidates.mine;
+  if (list.includes(i)) list.splice(list.indexOf(i), 1);
+  else { list.push(i); ui.fresh.pin = i; }
+  send({ t: 'candidates', cells: list });
+}
+
+function cellNode(c, i, g) {
+  const mine = g.candidates.mine.includes(i);
+  const partner = g.candidates.partner.includes(i);
+  const canConfirm = mine && c.selectable;
+  const classes = ['cell'];
+  if (mine) classes.push('marked');
+  if (partner && !mine) classes.push('marked-partner');
+  if (canConfirm) classes.push('can-confirm');
+  return el('div', { class: classes.join(' ') },
+    cardNode(c, i, g),
+    (mine || partner) && pinSvg(!mine, ui.fresh.pin === i),
+    canConfirm && el('button', {
+      class: 'confirm',
+      type: 'button',
+      'aria-label': `「${c.word}」で確定`,
+      onclick: () => send({ t: 'pick', cell: i }),
+    }, '確定'));
 }
 
 function statusText(g) {
@@ -497,28 +550,19 @@ function hintForm(g) {
       send({ t: 'hint', word: ui.hintWord, number: ui.hintNumber, intended: [...ui.targets] });
     },
   },
-  el('h2', {}, '電報を打つ'),
+  el('div', { class: 'tele-side' }, el('h2', {}, '電報を打つ'), el('p', { class: 'hint-note' }, note)),
   el('div', { class: 'hint-form' },
     field('ヒント（1語）', word),
     el('div', { class: 'field' }, el('span', {}, '数字'), el('div', { class: 'stepper' }, step(-1, '−', '数字を減らす'), number, step(1, '+', '数字を増やす'))),
-    el('button', { class: 'btn primary', type: 'submit', disabled: ui.hintNumber > 0 && ui.targets.size === 0 }, '打電する')),
-  el('p', { class: 'hint-note' }, note));
+    el('button', { class: 'btn primary', type: 'submit', disabled: ui.hintNumber > 0 && ui.targets.size === 0 }, '打電する')));
 }
 
 function pickBar(g) {
-  const c = g.cells[ui.candidate];
-  const desktop = matchMedia('(min-width: 901px)').matches;
-  const decide = () => {
-    if (desktop && !ui.confirming) { ui.confirming = true; render(); return; }
-    send({ t: 'pick', cell: ui.candidate });
-    ui.candidate = null;
-    ui.confirming = false;
-  };
+  const n = g.candidates.mine.length;
   return el('div', { class: 'choose' },
-    c
-      ? el('button', { class: `btn ${ui.confirming ? 'warn' : 'primary'}`, type: 'button', onclick: decide },
-        ui.confirming ? `本当に「${c.word}」でいい？` : `「${c.word}」に決定`)
-      : el('span', { class: 'hint-note' }, 'カードを選ぶと付箋が付きます'),
+    el('span', { class: 'hint-note' }, n
+      ? `候補 ${n}枚。付箋の札の「確定」で答えます。`
+      : 'カードを選ぶと付箋が付きます。何枚でも付けられて、相方にも見えます。'),
     g.canStop && el('button', { class: 'btn', type: 'button', onclick: () => send({ t: 'stop' }) }, '手番を終える'));
 }
 
@@ -641,7 +685,7 @@ function render() {
       solo && (over || g.canGive || g.canPick) && seatButton('small'),
       !solo && !state.partner.online && el('span', { class: 'meta off' }, '相方は接続していません')),
     ledgerNode(g),
-    el('div', { class: 'board-wrap' }, el('div', { class: `board${ui.fresh.deal ? ' deal' : ''}` }, g.cells.map((c, i) => cardNode(c, i, g)))),
+    el('div', { class: 'board-wrap' }, el('div', { class: `board${ui.fresh.deal ? ' deal' : ''}` }, g.cells.map((c, i) => cellNode(c, i, g)))),
     el('div', { class: 'actions' }, tabs, el('div', { class: 'actions-body' }, notices, action)),
     el('aside', { class: 'panel' }, historyBox(g), assist),
     over && reviewNode(g));
