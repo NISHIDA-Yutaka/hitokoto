@@ -1,0 +1,35 @@
+# ひとこと探偵
+
+1語のヒントで通じ合う、2人用の協力推理ゲーム。各自の端末で遊ぶ Web アプリ。
+盤面の25語から、協力者15人を制限時間内に見つける。黒幕は1回まで許され、2回目で迷宮入りになる。
+手番のあとは、AI（Jev）がヒントの通じ度を出してツッコミを入れる。
+
+## 構成
+
+- `src/game.js` ルール判定（通信や DB を知らない）
+- `src/view.js` 受け取る人ごとの表示内容。相方の面と狙いはゲーム終了まで入れない
+- `src/review.js` ツッコミと感想戦
+- `src/jev.js` Jev への問い合わせ。ヒントと盤面の単語だけを送る
+- `src/db.js` PostgreSQL の読み書き。1操作1トランザクションで、ゲーム行をロックする
+- `src/server.js` HTTP と WebSocket、荒らし対策の上限
+- `public/` 画面（ビルドなし）。表示と入力だけで、判定は持たない
+
+## 開発
+
+`hitokoto-dev` ユーザーで作業する。
+
+```sh
+psql -d hitokoto_dev -f migrations/001_init.sql   # 初回だけ
+pnpm install
+PGHOST=/var/run/postgresql PGDATABASE=hitokoto_dev pnpm test
+PORT=3071 HOST=127.0.0.1 PGHOST=/var/run/postgresql PGDATABASE=hitokoto_dev node src/server.js
+```
+
+手元から見るときは `ssh -L 3071:127.0.0.1:3071 kagoya`。
+
+## 本番
+
+- https://hitokoto.133-18-185-116.sslip.io 、ポート 3070、`/healthz`
+- 環境変数の秘密は `/etc/apps/hitokoto.env`（`TYPESAFE_API_KEY`）。空なら AI ツッコミなしで動く
+- テーブルの変更は `sudo -u postgres psql -d hitokoto -f migrations/<file>.sql`。コミットの本文に「本番作業:」を書いて自動デプロイを止める
+- 身内ネタの単語はこのリポジトリに入れず、本番 DB に `inside_joke = true` で入れる
