@@ -36,6 +36,9 @@ async function post(url, body) {
 
 const roomCode = location.pathname.match(/^\/r\/([\w-]+)$/)?.[1] ?? null;
 const tokenKey = (code) => `hitokoto.token.${code}`;
+// 一人で動作確認するときの、もう片方の席のトークン
+const soloKey = (code) => `hitokoto.solo.${code}`;
+const isSolo = () => Boolean(roomCode && store.get(soloKey(roomCode)));
 
 // ---------- 入口 ----------
 
@@ -134,7 +137,30 @@ function renderWaiting(state) {
         onclick: async () => {
           try { await navigator.clipboard.writeText(url); toast('コピーしました'); } catch { input.select(); }
         },
-      }, 'コピー'))));
+      }, 'コピー')),
+    el('p', {}, el('button', { class: 'btn', type: 'button', onclick: startSolo }, '一人で動作確認する')),
+    el('p', { class: 'hint-note' }, '相方の席もこのブラウザが取り、2つの席を交代しながら最後まで遊べます。この部屋に友達は入れなくなります。')));
+}
+
+async function startSolo() {
+  try {
+    const res = await post(`/api/rooms/${roomCode}/join`, { name: '相方役' });
+    store.set(soloKey(roomCode), res.token);
+    render();
+  } catch (err) { toast(err.message); }
+}
+
+function switchSeat() {
+  const current = store.get(tokenKey(roomCode));
+  store.set(tokenKey(roomCode), store.get(soloKey(roomCode)));
+  store.set(soloKey(roomCode), current);
+  ui.candidate = null;
+  ui.confirming = false;
+  ui.targets.clear();
+  ui.hintWord = '';
+  ui.hintNumber = 1;
+  if (ws) { ws.onclose = null; ws.close(); }
+  connect();
 }
 
 // ---------- 接続 ----------
@@ -378,7 +404,9 @@ function render() {
     g.myGreensDone && !over && el('p', { class: 'hint-note' }, 'あなたの面の協力者はすべて接触済みです。ヒントは相方が出します。'),
     g.partnerGreensDone && !over && el('p', { class: 'hint-note' }, '相方の面の協力者はすべて接触済みです。'),
   ];
-  const action = over ? null : g.canGive ? hintForm(g) : g.canPick ? pickBar(g) : null;
+  const solo = isSolo();
+  const seatButton = (cls) => el('button', { class: `btn ${cls}`, type: 'button', onclick: switchSeat }, '相方の席に替わる');
+  const action = over ? null : g.canGive ? hintForm(g) : g.canPick ? pickBar(g) : solo ? seatButton('primary') : null;
 
   const tabs = el('div', { class: 'tabs' }, [['input', '入力'], ['history', '履歴']].map(([id, text]) =>
     el('button', { type: 'button', 'aria-pressed': ui.tab === id ? 'true' : 'false', onclick: () => { ui.tab = id; render(); } }, text)));
@@ -395,7 +423,9 @@ function render() {
       el('span', { class: 'title' }, 'ひとこと探偵'),
       el('span', { class: 'state' }, statusText(g)),
       el('span', { class: 'hint-note' }, `タイマー ${g.timerBank}・${g.outs}アウト`),
-      !state.partner.online && el('span', { class: 'hint-note' }, '相方は接続していません')),
+      solo && el('span', { class: 'hint-note' }, `動作確認中・${state.you.name}の席`),
+      solo && (over || g.canGive || g.canPick) && seatButton('small'),
+      !solo && !state.partner.online && el('span', { class: 'hint-note' }, '相方は接続していません')),
     el('div', { class: 'board' }, g.cells.map((c, i) => cardNode(c, i, g))),
     el('aside', { class: 'panel' }, metersBox(g), historyBox(g), assist),
     el('div', { class: 'actions' }, tabs, el('div', { class: 'actions-body' }, notices, action)),

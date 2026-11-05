@@ -42,6 +42,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .btn.primary { background: var(--lamp); border-color: var(--lamp); color: #2a2318; font-weight: 700; }
 .btn.warn { background: var(--wax); border-color: var(--wax); color: #fff; font-weight: 700; }
+.btn.small { min-height: 36px; padding: 4px 12px; font-size: 14px; }
 
 /* 入口 */
 .entry { max-width: 460px; margin: 0 auto; padding: 48px 16px; }
@@ -159,6 +160,8 @@ details.more summary { cursor: pointer; margin-bottom: 12px; }
   color: #d8d2dd;
   font-size: 11px;
 }
+
+.seal + .seal { left: 29px; }
 
 .panel { grid-column: 2; grid-row: 2 / span 2; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .box { padding: 12px; border: 1px solid var(--desk-line); border-radius: var(--radius); background: rgba(23, 36, 61, .8); }
