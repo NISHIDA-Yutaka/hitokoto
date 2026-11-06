@@ -233,6 +233,10 @@ body.playing { background-image: url("/blinds.svg"); background-size: cover; bac
 .status-line .state { flex: 1; min-width: 200px; font-weight: 700; font-size: 17px; color: var(--lamp); }
 .status-line .meta { font-size: 14px; color: var(--muted); }
 .status-line .meta.off { color: #ffb4a5; }
+.record-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 14px; font-weight: 700; }
+.record-nav a { padding: 3px 9px; color: var(--muted); text-decoration: none; }
+.record-nav a[aria-current] { background: var(--lamp); color: var(--ink); }
+.record-nav i { width: 1px; height: 16px; margin: 0 4px; background: var(--plate-2); }
 
 .board-wrap { grid-area: board; min-width: 0; align-self: start; }
 .board {

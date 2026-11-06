@@ -97,6 +97,14 @@ async function handleApi(req, res, url) {
   return sendJson(res, 404, { error: 'not found' });
 }
 
+// 終わった対局を、遊ばずに読み返すための読み取り専用の入口。部屋の URL を知っている人だけが開ける
+async function sendRecord(res, code, query) {
+  const found = await db.loadFinished(code, query.has('game') ? Number(query.get('game')) : undefined);
+  if (!found) return sendJson(res, 404, { error: '記録が見つかりません' });
+  const seat = query.get('seat') === 'B' ? 'B' : 'A';
+  return sendJson(res, 200, { ...viewFor(found, seat, { A: true, B: true }), record: { no: found.no, total: found.total } });
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   try {
@@ -110,6 +118,11 @@ const server = createServer(async (req, res) => {
       return;
     }
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405).end(); return; }
+    const record = url.pathname.match(/^\/api\/rooms\/([\w-]{8,32})\/review$/);
+    if (record) {
+      await sendRecord(res, record[1], url.searchParams);
+      return;
+    }
     const path = url.pathname === '/' || url.pathname.startsWith('/r/') ? '/index.html' : url.pathname;
     const asset = assets.get(path);
     if (!asset) { res.writeHead(404).end('not found'); return; }

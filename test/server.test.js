@@ -159,8 +159,23 @@ test('ヒント、当てる、止める、再接続、2アウトの敗北、感�
 
   await act(wa, { t: 'rematch' }, (s) => s.game.phase === 'playing');
   assert.equal(wa.last.game.timerBank, 9);
+
+  // 読み返せるのは終わった対局だけ。次の対局が進行中でも、そちらは出さない
+  const record = await (await fetch(`${BASE}/api/rooms/${wa.last.code}/review?seat=B`)).json();
+  assert.equal(record.game.phase, 'lost');
+  assert.equal(record.you.seat, 'B');
+  assert.deepEqual(record.record, { no: 1, total: 1 });
+  assert.equal(record.game.review.turns.length, 4);
+  assert.equal((await fetch(`${BASE}/api/rooms/${wa.last.code}/review?game=2`)).status, 404);
   wa.close();
   again.close();
+});
+
+test('進行中の対局は読み返せない', async () => {
+  const { wa, wb } = await startRoom();
+  assert.equal((await fetch(`${BASE}/api/rooms/${wa.last.code}/review`)).status, 404);
+  wa.close();
+  wb.close();
 });
 
 test('同時に選んでも記録は崩れない', async () => {

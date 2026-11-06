@@ -180,17 +180,44 @@ export async function rematch(roomId) {
   });
 }
 
+async function loadPlayers(c, roomId) {
+  const { rows } = await c.query('select seat, name from players where room_id = $1', [roomId]);
+  return Object.fromEntries(rows.map((p) => [p.seat, { name: p.name }]));
+}
+
 export async function loadRoom(roomId) {
   const client = await pool.connect();
   try {
     const { rows: rooms } = await client.query('select id, code, settings from rooms where id = $1', [roomId]);
     if (!rooms[0]) return null;
-    const { rows: seats } = await client.query('select seat, name from players where room_id = $1', [roomId]);
     const { rows } = await client.query(latestGameQuery, [roomId]);
     return {
       room: rooms[0],
-      players: Object.fromEntries(seats.map((p) => [p.seat, { name: p.name }])),
+      players: await loadPlayers(client, roomId),
       game: rows[0] ? await loadGame(client, rows[0]) : null,
+    };
+  } finally {
+    client.release();
+  }
+}
+
+// 終わった対局を読み返す。no は古い方から数えた番号で、省くと最新。
+// 進行中の対局は両方の面が見えてしまうので、ここからは決して返さない
+export async function loadFinished(code, no) {
+  const client = await pool.connect();
+  try {
+    const { rows: rooms } = await client.query('select id, code, settings from rooms where code = $1', [code]);
+    if (!rooms[0]) return null;
+    const { rows } = await client.query(
+      "select * from games where room_id = $1 and phase in ('won', 'lost') order by started_at", [rooms[0].id]);
+    const index = (no ?? rows.length) - 1;
+    if (!rows[index]) return null;
+    return {
+      room: rooms[0],
+      players: await loadPlayers(client, rooms[0].id),
+      game: await loadGame(client, rows[index]),
+      no: index + 1,
+      total: rows.length,
     };
   } finally {
     client.release();

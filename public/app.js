@@ -36,6 +36,7 @@ async function post(url, body) {
 }
 
 const roomCode = location.pathname.match(/^\/r\/([\w-]+)$/)?.[1] ?? null;
+const recordCode = location.pathname.match(/^\/r\/([\w-]+)\/review$/)?.[1] ?? null;
 const tokenKey = (code) => `hitokoto.token.${code}`;
 // 一人で動作確認するときの、もう片方の席のトークン
 const soloKey = (code) => `hitokoto.solo.${code}`;
@@ -405,6 +406,30 @@ function onState(next) {
   flashNewHint();
 }
 
+// 終わった対局を読み返す画面。接続せず、1回読むだけ
+async function openRecord() {
+  const res = await fetch(`/api/rooms/${recordCode}/review${location.search}`);
+  if (!res.ok) {
+    entryShell('1語のヒントだけで、協力者15人を探し出す。2人用の協力推理ゲーム。',
+      el('section', { class: 'sheet paper' },
+        el('h2', {}, '記録が見つかりません'),
+        el('p', { class: 'lead' }, '終わった対局だけを読み返せます。部屋は30日使わないと消えます。')));
+    return;
+  }
+  state = await res.json();
+  render();
+}
+
+function recordNav() {
+  const { no, total } = state.record;
+  const seat = state.you.seat;
+  const link = (text, game, s, on) => el('a', { href: `?game=${game}&seat=${s}`, 'aria-current': on ? 'page' : null }, text);
+  const games = Array.from({ length: total }, (_, i) => link(`第${i + 1}局`, i + 1, seat, i + 1 === no));
+  const names = { [seat]: state.you.name, [seat === 'A' ? 'B' : 'A']: state.partner.name };
+  const seats = ['A', 'B'].map((s) => link(`${names[s]}の面`, no, s, s === seat));
+  return el('nav', { class: 'record-nav', 'aria-label': '読み返す対局と面' }, games, el('i', { 'aria-hidden': 'true' }), seats);
+}
+
 // ---------- ゲーム画面 ----------
 
 const SYMBOLS = { green: '●', assassin: '×', bystander: '' };
@@ -748,7 +773,7 @@ function reviewNode(g) {
         td(4, t.ai?.decoy ?? '—'),
         td(5, t.ai?.tsujido === null || !t.ai ? '—' : `${t.ai.tsujido}%`),
         td(6, t.ai ? `${t.ai.danger}%` : '—')))))),
-    el('div', { class: 'review-end' }, el('button', { class: 'btn primary', type: 'button', onclick: () => send({ t: 'rematch' }) }, 'もう一局')));
+    !state.record && el('div', { class: 'review-end' }, el('button', { class: 'btn primary', type: 'button', onclick: () => send({ t: 'rematch' }) }, 'もう一局')));
 }
 
 function render() {
@@ -794,6 +819,7 @@ function render() {
     head: el('header', { class: 'status-line', 'data-slot': 'head' },
       el('span', { class: 'brand' }, markSvg(), el('span', { class: 'title' }, 'ひとこと探偵')),
       el('span', { class: 'state' }, statusText(g)),
+      state.record && recordNav(),
       solo && el('span', { class: 'meta' }, `動作確認中・${state.you.name}の席`),
       solo && (over || g.canGive || g.canPick) && seatButton('small'),
       !solo && !state.partner.online && el('span', { class: 'meta off' }, '相方は接続していません')),
@@ -833,5 +859,6 @@ function render() {
   }
 }
 
-if (roomCode) connect();
+if (recordCode) openRecord();
+else if (roomCode) connect();
 else renderCreate();
