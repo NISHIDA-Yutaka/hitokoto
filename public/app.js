@@ -747,12 +747,64 @@ function ledgerNode(g) {
     el('div', {}, el('h2', {}, '黒幕', el('span', { class: 'num' }, `${g.outs}回`)), el('div', { class: 'seals', role: 'img', 'aria-label': `${g.outs}アウト` }, slots)));
 }
 
+const AI_HELP = [
+  ['予想', 'このヒントを聞いた人が選びそうな語です。有力な順に、ヒントの枚数ぶん並べています。'],
+  ['迷わせ', '狙い以外で一番選ばれそうな語です。相方が引っかかるとしたらこの語、という読みです。'],
+  ['通じ度', '狙った語が選ばれそうな度合いです。高いほど、ヒントの意図が伝わりやすかったことになります。'],
+  ['危険度', 'ヒントを出した人の面の黒幕が選ばれそうな度合いです。高いほど、黒幕に触れやすい危ないヒントだったことになります。'],
+];
+
+const hideTip = () => document.querySelector('.tip')?.remove();
+
+// 表は横にはみ出すと切れるので、説明は表の外に出して画面に固定する
+function showTip(anchor, text) {
+  hideTip();
+  const node = el('div', { class: 'tip', role: 'tooltip' }, text);
+  document.body.append(node);
+  const box = anchor.getBoundingClientRect();
+  node.style.setProperty('left', `${Math.max(8, Math.min(box.left, innerWidth - node.offsetWidth - 8))}px`);
+  node.style.setProperty('top', `${box.bottom + 8}px`);
+  addEventListener('scroll', hideTip, { once: true, capture: true });
+}
+
+function reviewTable(r) {
+  const nameOf = (seat) => (seat === state.you.seat ? state.you.name : state.partner.name ?? '相方');
+  const who = (seat) => el('span', { class: `who who-${seat}` }, nameOf(seat));
+  const picksText = (t) => t.picks.map((p) => el('span', { class: p.result === 'green' ? 'tag-green' : 'tag-bad' },
+    `${p.word}${p.result === 'green' ? '' : p.result === 'assassin' ? '（黒幕）' : '（不正解）'} `));
+  const aiCell = (i, value) => el('td', { class: `ai${i === 0 ? ' ai-start' : ''}`, 'data-label': AI_HELP[i][0] }, value);
+  const helpHead = ([label, text], i) => el('th', { class: `ai${i === 0 ? ' ai-start' : ''}`, scope: 'col' },
+    el('button', {
+      class: 'ai-term',
+      type: 'button',
+      'aria-label': `${label}: ${text}`,
+      onmouseenter: (e) => showTip(e.currentTarget, text),
+      onmouseleave: hideTip,
+      onfocus: (e) => showTip(e.currentTarget, text),
+      onblur: hideTip,
+    }, label, el('i', { 'aria-hidden': 'true' }, '?')));
+
+  return el('table', { class: 'review-table' },
+    el('thead', {},
+      el('tr', { class: 'groups' },
+        el('th', { colspan: 3, scope: 'colgroup' }, 'プレイヤーの判断'),
+        el('th', { colspan: 4, scope: 'colgroup', class: 'ai ai-start' }, 'AIの読み')),
+      el('tr', {},
+        ['ヒント', '狙い', '回答'].map((h) => el('th', { scope: 'col' }, h)),
+        AI_HELP.map(helpHead))),
+    el('tbody', {}, r.turns.map((t) => el('tr', {},
+      el('td', { 'data-label': 'ヒント' }, el('span', {}, who(t.giver), `${t.hint}: ${t.number}`)),
+      el('td', { 'data-label': '狙い' }, t.intended.join('、') || '—'),
+      el('td', { 'data-label': '回答' }, el('span', {}, who(t.giver === 'A' ? 'B' : 'A'), t.picks.length ? picksText(t) : '—')),
+      el('td', { class: 'ai ai-title', 'aria-hidden': 'true' }, 'AIの読み'),
+      aiCell(0, t.ai?.topPicks.join('、') ?? '—'),
+      aiCell(1, t.ai?.decoy ?? '—'),
+      aiCell(2, t.ai?.tsujido === null || !t.ai ? '—' : `${t.ai.tsujido}%`),
+      aiCell(3, t.ai ? `${t.ai.danger}%` : '—')))));
+}
+
 function reviewNode(g) {
   const r = g.review;
-  const picksText = (t) => t.picks.map((p) => el('span', { class: p.result === 'green' ? 'tag-green' : 'tag-bad' },
-    `${p.word}${p.result === 'green' ? '' : p.result === 'assassin' ? '（黒幕）' : '（通行人）'} `));
-  const cols = ['ヒント', '狙い', '相方の選択', 'AIの予想', '迷わせ', '通じ度', '危険度'];
-  const td = (i, ...children) => el('td', { 'data-label': cols[i] }, children);
   const hasScore = g.score !== null && g.score !== undefined;
   return el('section', { class: 'review paper', id: 'review', 'data-slot': 'review' },
     el('div', { class: 'review-head' },
@@ -763,21 +815,15 @@ function reviewNode(g) {
       el('div', { class: 'award' }, el('h3', {}, 'AI超え'), el('div', { class: 'big' }, `${r.beatCount}回`)),
       r.lowestHit && el('div', { class: 'award' }, el('h3', {}, '通じ度が一番低かったのに当たった'), el('div', { class: 'big' }, `${r.lowestHit.hint}（${r.lowestHit.tsujido}%）`)),
       r.biggestGap && el('div', { class: 'award' }, el('h3', {}, 'AIがなぜか推した単語'), el('div', { class: 'big' }, `「${r.biggestGap.hint}」で ${r.biggestGap.word}`))),
-    el('div', { class: 'review-wrap' }, el('table', { class: 'review-table' },
-      el('thead', {}, el('tr', {}, cols.map((h) => el('th', { scope: 'col' }, h)))),
-      el('tbody', {}, r.turns.map((t) => el('tr', {},
-        td(0, `${t.hint}: ${t.number}`),
-        td(1, t.intended.join('、') || '—'),
-        td(2, el('span', {}, picksText(t))),
-        td(3, t.ai?.topPicks.join('、') ?? '—'),
-        td(4, t.ai?.decoy ?? '—'),
-        td(5, t.ai?.tsujido === null || !t.ai ? '—' : `${t.ai.tsujido}%`),
-        td(6, t.ai ? `${t.ai.danger}%` : '—')))))),
+    el('details', { class: 'ai-help' }, el('summary', {}, 'AIの項目の見方'),
+      el('dl', {}, AI_HELP.flatMap(([label, text]) => [el('dt', {}, label), el('dd', {}, text)]))),
+    el('div', { class: 'review-wrap' }, reviewTable(r)),
     !state.record && el('div', { class: 'review-end' }, el('button', { class: 'btn primary', type: 'button', onclick: () => send({ t: 'rematch' }) }, 'もう一局')));
 }
 
 function render() {
   if (!state) return;
+  hideTip();
   const g = state.game;
   if (!g) { renderWaiting(state); return; }
   document.body.classList.add('playing');
