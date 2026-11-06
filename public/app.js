@@ -337,7 +337,7 @@ function noteChanges(prev, g) {
 function showSlip(ai) {
   const node = el('aside', { class: 'slip paper', role: 'status' },
     dial(ai.tsujido),
-    el('div', {}, el('div', { class: 'label' }, '通じ度'), el('div', { class: 'pct' }, String(ai.tsujido), el('small', {}, '%'))),
+    el('div', {}, el('div', { class: 'label' }, '通じる度'), el('div', { class: 'pct' }, String(ai.tsujido), el('small', {}, '%'))),
     el('div', { class: 'said' }, catSvg(), el('span', {}, ai.line)),
     el('button', { class: 'close', type: 'button', 'aria-label': '閉じる', onclick: () => dismiss() }, '×'));
   let timer;
@@ -722,7 +722,7 @@ function historyBox(g) {
     pickChips(t.picks, pop && !sudden && i === 0),
     t.ai && [
       gauge(t.ai.tsujido),
-      el('div', { class: 'line' }, `通じ度 ${t.ai.tsujido}%　${t.ai.line}`),
+      el('div', { class: 'line' }, `通じる度 ${t.ai.tsujido}%　${t.ai.line}`),
     ]));
   if (sudden) {
     items.unshift(el('li', {}, el('div', { class: 'hint' }, 'ヒントなしの勝負'), pickChips(g.suddenPicks, pop)));
@@ -748,9 +748,9 @@ function ledgerNode(g) {
 }
 
 const AI_HELP = [
-  ['予想', 'このヒントを聞いた人が選びそうな語です。有力な順に、ヒントの枚数ぶん並べています。'],
-  ['迷わせ', '狙い以外で一番選ばれそうな語です。相方が引っかかるとしたらこの語、という読みです。'],
-  ['通じ度', '狙った語が選ばれそうな度合いです。高いほど、ヒントの意図が伝わりやすかったことになります。'],
+  ['AI予想', 'このヒントを聞いた人が選びそうな語です。有力な順に、ヒントの枚数ぶん並べています。'],
+  ['もしかして', '狙い以外で一番選ばれそうな語です。相方が引っかかるとしたらこの語、という読みです。'],
+  ['通じる度', '狙った語が選ばれそうな度合いです。高いほど、ヒントの意図が伝わりやすかったことになります。'],
   ['危険度', 'ヒントを出した人の面の黒幕が選ばれそうな度合いです。高いほど、黒幕に触れやすい危ないヒントだったことになります。'],
 ];
 
@@ -813,7 +813,7 @@ function reviewNode(g) {
     el('p', { class: 'note' }, '盤面のカードの右下に、相方の面が出ています。'),
     el('div', { class: 'awards' },
       el('div', { class: 'award' }, el('h3', {}, 'AI超え'), el('div', { class: 'big' }, `${r.beatCount}回`)),
-      r.lowestHit && el('div', { class: 'award' }, el('h3', {}, '通じ度が一番低かったのに当たった'), el('div', { class: 'big' }, `${r.lowestHit.hint}（${r.lowestHit.tsujido}%）`)),
+      r.lowestHit && el('div', { class: 'award' }, el('h3', {}, '通じる度が一番低かったのに当たった'), el('div', { class: 'big' }, `${r.lowestHit.hint}（${r.lowestHit.tsujido}%）`)),
       r.biggestGap && el('div', { class: 'award' }, el('h3', {}, 'AIがなぜか推した単語'), el('div', { class: 'big' }, `「${r.biggestGap.hint}」で ${r.biggestGap.word}`))),
     el('details', { class: 'ai-help' }, el('summary', {}, 'AIの項目の見方'),
       el('dl', {}, AI_HELP.flatMap(([label, text]) => [el('dt', {}, label), el('dd', {}, text)]))),
