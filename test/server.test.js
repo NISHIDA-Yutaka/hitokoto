@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { after, before, test } from 'node:test';
 import pg from 'pg';
 import WebSocket from 'ws';
+import { WORD_LISTS } from '../src/wordlists.js';
 
 const PORT = 3171;
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -157,8 +158,11 @@ test('ヒント、当てる、止める、再接続、2アウトの敗北、感�
   assert.equal(wa.last.game.review.turns.length, 4);
   assert.equal(wa.last.game.review.turns[0].intended.length, 1);
 
-  await act(wa, { t: 'rematch' }, (s) => s.game.phase === 'playing');
+  await act(wa, { t: 'rematch', wordList: 'kana' }, (s) => s.game.phase === 'playing');
   assert.equal(wa.last.game.timerBank, 9);
+  assert.equal(wa.last.game.wordList, 'kana');
+  assert.equal(wa.last.settings.wordList, 'kana');
+  assert.ok(wa.last.game.cells.every((c) => WORD_LISTS.kana.includes(c.word)));
 
   // 読み返せるのは終わった対局だけ。次の対局が進行中でも、そちらは出さない
   const record = await (await fetch(`${BASE}/api/rooms/${wa.last.code}/review?seat=B`)).json();

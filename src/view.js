@@ -24,6 +24,7 @@ export function viewFor({ room, players, game }, seat, online = {}, candidates =
     ...base,
     game: {
       phase: game.phase,
+      wordList: game.settings.wordList ?? null,
       timerBank: game.timerBank,
       timers: game.settings.timers,
       outs: game.outs,

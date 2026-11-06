@@ -127,6 +127,8 @@ function field(label, control) {
   return el('label', { class: 'field' }, el('span', {}, label), control);
 }
 
+const WORD_LISTS = [['mild', 'ひらがな控えめ'], ['kana', 'ひらがな多め']];
+
 function seg(name, legend, options, value) {
   return el('fieldset', { class: 'seg' }, el('legend', {}, legend),
     el('div', { class: 'seg-row' }, options.map(([v, text]) => el('label', {},
@@ -202,6 +204,7 @@ function renderCreate() {
             maxOuts: Number(f.get('maxOuts')),
             timerShortage: f.get('timerShortage'),
             aiReveal: f.get('aiReveal'),
+            wordList: f.get('wordList'),
           },
         });
         store.set(tokenKey(res.code), res.token);
@@ -214,6 +217,7 @@ function renderCreate() {
   seg('timers', 'マッチの本数', [[9, '9本'], [10, '10本'], [11, '11本']], 9),
   seg('assassinPenalty', '黒幕に触れると燃えるマッチ', [[1, '1本'], [2, '2本'], [3, '3本']], 2),
   seg('aiReveal', 'AIのツッコミ', [['afterTurn', '手番ごとに'], ['afterGame', '最後にまとめて']], 'afterTurn'),
+  seg('wordList', '単語リスト', WORD_LISTS, 'mild'),
   el('details', { class: 'more' }, el('summary', {}, '細かい設定'),
     seg('maxOuts', '黒幕を許す回数', [[0, '0回'], [1, '1回'], [2, '2回']], 1),
     seg('timerShortage', '燃やすマッチが足りないとき', [['pay', 'あるだけ払う'], ['lose', '払えなければ負け']], 'pay')),
@@ -803,14 +807,27 @@ function reviewTable(r) {
       aiCell(3, t.ai ? `${t.ai.danger}%` : '—')))));
 }
 
+// 次の対局の単語リスト。感想戦の間だけ手元で覚える
+function nextList() {
+  const node = seg('nextList', '次の単語リスト', WORD_LISTS, ui.nextList ?? state.settings.wordList ?? 'mild');
+  node.addEventListener('change', (e) => { ui.nextList = e.target.value; });
+  return node;
+}
+
+function rematch() {
+  send({ t: 'rematch', wordList: ui.nextList ?? state.settings.wordList });
+  ui.nextList = null;
+}
+
 function reviewNode(g) {
   const r = g.review;
+  const listName = WORD_LISTS.find(([id]) => id === g.wordList)?.[1];
   const hasScore = g.score !== null && g.score !== undefined;
   return el('section', { class: 'review paper', id: 'review', 'data-slot': 'review' },
     el('div', { class: 'review-head' },
       el('h2', { class: g.phase === 'won' ? 'verdict-won' : 'verdict-lost' }, g.phase === 'won' ? '事件解決' : '迷宮入り'),
       hasScore && el('p', { class: 'score' }, el('b', {}, String(g.score)), `点${g.score >= 9 ? '　お見事' : g.score > 5 ? '　上出来' : ''}`)),
-    el('p', { class: 'note' }, '盤面のカードの右下に、相方の面が出ています。'),
+    el('p', { class: 'note' }, el('span', {}, '盤面のカードの右下に、相方の面が出ています。'), listName && el('span', {}, `単語リスト: ${listName}`)),
     el('div', { class: 'awards' },
       el('div', { class: 'award' }, el('h3', {}, 'AI超え'), el('div', { class: 'big' }, `${r.beatCount}回`)),
       r.lowestHit && el('div', { class: 'award' }, el('h3', {}, '通じる度が一番低かったのに当たった'), el('div', { class: 'big' }, `${r.lowestHit.hint}（${r.lowestHit.tsujido}%）`)),
@@ -818,7 +835,7 @@ function reviewNode(g) {
     el('details', { class: 'ai-help' }, el('summary', {}, 'AIの項目の見方'),
       el('dl', {}, AI_HELP.flatMap(([label, text]) => [el('dt', {}, label), el('dd', {}, text)]))),
     el('div', { class: 'review-wrap' }, reviewTable(r)),
-    !state.record && el('div', { class: 'review-end' }, el('button', { class: 'btn primary', type: 'button', onclick: () => send({ t: 'rematch' }) }, 'もう一局')));
+    !state.record && el('div', { class: 'review-end' }, nextList(), el('button', { class: 'btn primary', type: 'button', onclick: rematch }, 'もう一局')));
 }
 
 function render() {

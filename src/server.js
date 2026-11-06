@@ -198,7 +198,7 @@ async function handleMessage(ws, msg) {
       await db.withGame(roomId, (g) => stopTurn(g, seat));
       break;
     case 'rematch':
-      await db.rematch(roomId);
+      await db.rematch(roomId, msg.wordList);
       break;
     default:
       throw new GameError('不明な操作です');

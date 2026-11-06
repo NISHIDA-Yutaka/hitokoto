@@ -32,7 +32,7 @@ test('各面は緑9・黒3、当てる単語は15個', () => {
 
 test('設定は範囲外を既定値に戻す', () => {
   assert.deepEqual(normalizeSettings({ timers: 99, assassinPenalty: 3, maxOuts: 5, aiReveal: 'afterGame' }),
-    { timers: 9, assassinPenalty: 3, maxOuts: 1, timerShortage: 'pay', aiReveal: 'afterGame' });
+    { timers: 9, assassinPenalty: 3, maxOuts: 1, timerShortage: 'pay', aiReveal: 'afterGame', wordList: 'mild' });
 });
 
 test('場の単語に重なるヒントと数字だけのヒントは拒む', () => {

@@ -9,6 +9,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   maxOuts: 1,
   timerShortage: 'pay', // pay: あるだけ払う / lose: 払えなければ敗北
   aiReveal: 'afterTurn', // afterTurn: 手番後に通じ度 / afterGame: ゲーム後だけ
+  wordList: 'mild', // mild: ひらがな控えめ / kana: ひらがな多め
 });
 
 const clampInt = (value, min, max, fallback) => {
@@ -24,6 +25,7 @@ export function normalizeSettings(input = {}) {
     maxOuts: clampInt(input.maxOuts, 0, 2, d.maxOuts),
     timerShortage: input.timerShortage === 'lose' ? 'lose' : d.timerShortage,
     aiReveal: input.aiReveal === 'afterGame' ? 'afterGame' : d.aiReveal,
+    wordList: input.wordList === 'kana' ? 'kana' : d.wordList,
   };
 }
 

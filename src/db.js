@@ -1,7 +1,8 @@
 // PostgreSQL の読み書き。接続先は PGHOST / PGDATABASE / PGUSER から取る。
 import { createHash, randomBytes, randomInt } from 'node:crypto';
 import pg from 'pg';
-import { GameError, newGame, shuffle } from './game.js';
+import { GameError, newGame, normalizeSettings, shuffle } from './game.js';
+import { WORD_LISTS } from './wordlists.js';
 
 const pool = new pg.Pool({ max: 5, idleTimeoutMillis: 30000 });
 pool.on('error', (e) => console.error('db pool', e.message));
@@ -48,17 +49,18 @@ export async function createRoom(name, settings) {
   return { code, token, seat: 'A' };
 }
 
-async function pickWords(c) {
-  const { rows } = await c.query('select word, inside_joke from words');
-  const plain = shuffle(rows.filter((r) => !r.inside_joke).map((r) => r.word));
-  const jokes = shuffle(rows.filter((r) => r.inside_joke).map((r) => r.word)).slice(0, 2 + randomInt(2));
+// 標準の単語は wordlists.js から、身内ネタだけ DB から取る
+async function pickWords(c, settings) {
+  const { rows } = await c.query('select word from words where inside_joke');
+  const jokes = shuffle(rows.map((r) => r.word)).slice(0, 2 + randomInt(2));
+  const plain = shuffle(WORD_LISTS[normalizeSettings(settings).wordList].filter((w) => !jokes.includes(w)));
   const words = shuffle([...jokes, ...plain.slice(0, 25 - jokes.length)]);
   if (words.length < 25) throw new GameError('単語リストが足りません');
   return words;
 }
 
 async function insertGame(c, roomId, settings) {
-  const g = newGame(await pickWords(c), settings);
+  const g = newGame(await pickWords(c, settings), settings);
   const { rows } = await c.query(
     'insert into games (room_id, timer_bank, settings) values ($1, $2, $3) returning id',
     [roomId, g.timerBank, settings],
@@ -170,13 +172,14 @@ export async function saveAi(turnId, ai) {
   await pool.query('update turns set ai = $2 where id = $1', [turnId, ai]);
 }
 
-export async function rematch(roomId) {
+export async function rematch(roomId, wordList) {
   return tx(async (c) => {
     const { rows: rooms } = await c.query('select settings from rooms where id = $1 for update', [roomId]);
     const { rows } = await c.query(latestGameQuery, [roomId]);
     if (rows[0] && !['won', 'lost'].includes(rows[0].phase)) throw new GameError('まだゲーム中です');
-    await insertGame(c, roomId, rooms[0].settings);
-    await c.query('update rooms set last_active_at = now() where id = $1', [roomId]);
+    const settings = normalizeSettings({ ...rooms[0].settings, wordList: wordList ?? rooms[0].settings.wordList });
+    await insertGame(c, roomId, settings);
+    await c.query('update rooms set settings = $2, last_active_at = now() where id = $1', [roomId, settings]);
   });
 }
 

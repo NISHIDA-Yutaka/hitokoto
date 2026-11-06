@@ -39,6 +39,11 @@
 
 感想戦の一覧は、プレイヤーの判断と AI の読みを色で分けている。AI の項目は見出しに説明を出す（スマホは「AIの項目の見方」を開く）。
 
+## 単語リスト
+
+標準の単語は `src/wordlists.js` にある。ひらがなの同音語の量が違う2つを、部屋を作るときと「もう一局」のときに選べる。同音語はひらがなで書き、意味を固定しない。
+身内ネタの単語だけは DB の `words`（`inside_joke = true`）に入れる。
+
 ## 一人で動作確認する
 
 部屋を作ったあとの待機画面で「一人で動作確認する」を押すと、相方の席もそのブラウザが取る。
@@ -50,7 +55,7 @@
 
 ```sh
 psql -d hitokoto_dev -f migrations/001_init.sql   # 初回だけ
-psql -d hitokoto_dev -f seed/words.sql            # 初回だけ
+psql -d hitokoto_dev -f seed/words.sql            # 初回だけ（標準の単語は src/wordlists.js に移った。今 DB で使うのは身内ネタだけ）
 pnpm install
 PGHOST=/var/run/postgresql PGDATABASE=hitokoto_dev pnpm test
 PORT=3071 HOST=127.0.0.1 PGHOST=/var/run/postgresql PGDATABASE=hitokoto_dev node src/server.js

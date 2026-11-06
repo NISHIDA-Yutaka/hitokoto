@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { DEFAULT_SETTINGS, candidateCells, giveHint, newGame, pick, stopTurn, turnKey } from '../src/game.js';
 import { tsukkomi, turnOutcome } from '../src/review.js';
+import { WORD_LISTS } from '../src/wordlists.js';
 import { viewFor } from '../src/view.js';
 
 const words = Array.from({ length: 25 }, (_, i) => `語${String.fromCharCode(0x4e00 + i * 7)}`);
@@ -98,5 +99,14 @@ test('捜査メモ用に、選んだ語と結果を2人に送る', () => {
   for (const seat of ['A', 'B']) {
     assert.deepEqual(view(g, seat).game.turns[0].picks, [{ word: g.cells[target].word, result: 'green' }]);
     assert.deepEqual(view(g, seat).game.suddenPicks, []);
+  }
+});
+
+test('単語リストは重複がなく、札に収まる長さで、盤面を組める', () => {
+  const fold = (w) => w.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
+  for (const list of Object.values(WORD_LISTS)) {
+    assert.equal(new Set(list.map(fold)).size, list.length);
+    assert.ok(list.every((w) => [...w].length <= 6));
+    assert.ok(list.length >= 25);
   }
 });
