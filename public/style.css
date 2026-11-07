@@ -440,8 +440,6 @@ body.playing { background-image: url("/blinds.svg"); background-size: cover; bac
 .stamp .big { font-size: 29px; }
 .stamp .small { font-size: 11px; }
 .stamp.fresh { animation: press .3s .24s cubic-bezier(.3, 1.5, .6, 1) both; }
-.card .symbol { position: absolute; z-index: 1; bottom: 4%; right: 6%; font-size: 14px; line-height: 1; font-family: var(--sans); }
-.card:has(.theirs) .symbol { bottom: auto; top: 22%; }
 
 /* 候補: 札を持ち上げ、押しピンの付箋を被せる */
 .cell.marked, .cell.marked-partner { z-index: 2; }
@@ -649,8 +647,6 @@ body.playing { background-image: url("/blinds.svg"); background-size: cover; bac
 .pick.pop { animation: chip-pop .3s .3s cubic-bezier(.3, 1.5, .5, 1) backwards; }
 .gauge { height: 6px; margin-top: 4px; background: var(--coal); overflow: hidden; }
 .gauge i { display: block; height: 100%; background: var(--lamp); }
-.settings-row { display: flex; align-items: center; gap: 8px; min-height: 36px; font-size: 14px; color: var(--muted); cursor: pointer; }
-.settings-row input { width: 18px; height: 18px; accent-color: var(--shu); }
 .tabs { display: none; }
 
 /* 猫の通じ度メモ */

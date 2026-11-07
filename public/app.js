@@ -436,8 +436,6 @@ function recordNav() {
 
 // ---------- ゲーム画面 ----------
 
-const SYMBOLS = { green: '●', assassin: '×', bystander: '' };
-const colorAssist = () => store.get('hitokoto.assist') === '1';
 
 // 朱肉のかすれた丸い検印。インクの荒れは index.html の #ink フィルター
 const stampSvg = (fresh) => svg('svg', { class: `stamp${fresh ? ' fresh' : ''}`, viewBox: '0 0 100 100', 'aria-hidden': 'true' },
@@ -495,10 +493,9 @@ function cardNode(c, i, g) {
     if (misses.length && !c.contact) classes.push('missed');
     if (hits.length) classes.push('exposed');
   }
-  if (c.theirs || colorAssist()) classes.push('no-mark');
+  if (c.theirs) classes.push('no-mark');
 
   const parts = [el('span', { class: `word${lenClass(c.word)}` }, c.word)];
-  if (colorAssist() && SYMBOLS[c.mine] && !c.contact) parts.push(el('span', { class: 'symbol', 'aria-hidden': 'true' }, SYMBOLS[c.mine]));
   const who = (list) => (list.length === 2 ? '2人とも' : list[0].mine ? '自分が' : '相方が');
   if (hits.length) {
     parts.push(el('span', { class: `tape${ui.fresh.misses.has(i) ? ' fresh' : ''}`, 'aria-hidden': 'true' }, el('b', {}, '黒幕　黒幕　黒幕　黒幕　黒幕　黒幕')));
@@ -871,13 +868,6 @@ function render() {
   const tabs = el('div', { class: 'tabs' }, [['input', '電報'], ['history', '捜査メモ']].map(([id, text]) =>
     el('button', { type: 'button', 'aria-pressed': ui.tab === id ? 'true' : 'false', onclick: () => { ui.tab = id; render(); } }, text)));
 
-  const assist = el('label', { class: 'settings-row' },
-    el('input', {
-      type: 'checkbox',
-      checked: colorAssist(),
-      onchange: (e) => { store.set('hitokoto.assist', e.target.checked ? '1' : '0'); render(); },
-    }), '色覚サポート');
-
   const slots = {
     head: el('header', { class: 'status-line', 'data-slot': 'head' },
       el('span', { class: 'brand' }, markSvg(), el('span', { class: 'title' }, 'ひとこと探偵')),
@@ -888,7 +878,7 @@ function render() {
       !solo && !state.partner.online && el('span', { class: 'meta off' }, '相方は接続していません')),
     ledger: ledgerNode(g),
     actions: el('div', { class: 'actions', 'data-slot': 'actions' }, tabs, el('div', { class: 'actions-body' }, notices, action)),
-    panel: el('aside', { class: 'panel', 'data-slot': 'panel' }, historyBox(g), assist),
+    panel: el('aside', { class: 'panel', 'data-slot': 'panel' }, historyBox(g)),
     review: over ? reviewNode(g) : null,
   };
   const board = el('div', { class: `board${ui.fresh.deal ? ' deal' : ''}` }, g.cells.map((c, i) => cellNode(c, i, g)));
